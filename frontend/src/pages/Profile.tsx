@@ -844,7 +844,7 @@ const Profile: React.FC = () => {
       </div>
       
       {/* Add custom CSS to handle hover effects and animations */}
-      <style jsx>{`
+      <style>{`
         .hover\\:bg-accent-soft:hover {
           background-color: var(--accent-soft);
         }

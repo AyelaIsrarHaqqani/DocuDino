@@ -1,4 +1,4 @@
-const AnalyticsChart: React.FC = () => {
+export const AnalyticsChart: React.FC = () => {
   return (
     <div className="analytics-section">
       <div className="chart-filters">
@@ -14,3 +14,5 @@ const AnalyticsChart: React.FC = () => {
     </div>
   );
 };
+
+export default AnalyticsChart;

@@ -52,7 +52,7 @@ const MFASetup: React.FC = () => {
       // We need to use a different API endpoint or parameter structure
       
       // Call the API with required parameters
-      const response = await authApi.verifyMFA({
+      await authApi.verifyMFA({
         mfa_session_token: 'setup',  // Special value to indicate setup mode
         token: verificationCode
       });

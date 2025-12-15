@@ -1,4 +1,4 @@
-const Toast: React.FC<{ message: string; type: 'success' | 'error' }> = ({ 
+export const Toast: React.FC<{ message: string; type: 'success' | 'error' }> = ({ 
   message, 
   type 
 }) => {
@@ -8,3 +8,5 @@ const Toast: React.FC<{ message: string; type: 'success' | 'error' }> = ({
     </div>
   );
 };
+
+export default Toast;

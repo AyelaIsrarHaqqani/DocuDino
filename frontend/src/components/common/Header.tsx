@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header: React.FC = () => {
-  const { isAuthenticated, logout, currentUser } = useAuth();
+  const { isAuthenticated, logout, user: currentUser } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   
@@ -78,7 +78,7 @@ const Header: React.FC = () => {
                   Verify
                 </NavLink>
               </li>
-              {currentUser?.isAdmin && (
+              {currentUser?.role === 'admin' && (
                 <li>
                   <NavLink to="/admin" className={isActive('/admin') ? 'active' : ''} onClick={closeMenu}>
                     Admin

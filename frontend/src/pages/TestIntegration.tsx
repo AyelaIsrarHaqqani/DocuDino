@@ -3,7 +3,8 @@ import { authApi } from '../services/api';
 
 const TestIntegration: React.FC = () => {
   const [formData, setFormData] = useState({
-    username: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: ''
   });
@@ -13,11 +14,11 @@ const TestIntegration: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await authApi.register(formData);
+      await authApi.register(formData);
       setMessage('Registration successful!');
       setError('');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed');
+      setError(err.message || 'Registration failed');
       setMessage('');
     }
   };
@@ -34,11 +35,22 @@ const TestIntegration: React.FC = () => {
       <h2>Test Backend Integration</h2>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '10px' }}>
-          <label>Username:</label>
+          <label>First Name:</label>
           <input
             type="text"
-            name="username"
-            value={formData.username}
+            name="firstName"
+            value={formData.firstName}
+            onChange={handleChange}
+            required
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Last Name:</label>
+          <input
+            type="text"
+            name="lastName"
+            value={formData.lastName}
             onChange={handleChange}
             required
             style={{ width: '100%', padding: '8px' }}

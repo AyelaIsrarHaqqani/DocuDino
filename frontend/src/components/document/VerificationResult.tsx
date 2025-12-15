@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import '../../styles/verification.css'; // Import the stylesheet
 
 interface VerificationResultProps {
@@ -48,7 +48,6 @@ interface VerificationResultProps {
 }
 
 const VerificationResult: React.FC<VerificationResultProps> = ({ result, onReset }) => {
-  const navigate = useNavigate();
 
   useEffect(() => {
     console.log('VerificationResult component received:', result);
@@ -109,11 +108,6 @@ const VerificationResult: React.FC<VerificationResultProps> = ({ result, onReset
   const documentAuthenticity = detailed_analysis?.authenticity?.score 
     ? detailed_analysis.authenticity.score >= 85
     : analysis_details?.document_authenticity || false;
-
-  // Extract data consistency from either detailed_analysis or analysis_details
-  const dataConsistency = detailed_analysis?.data_consistency?.score
-    ? detailed_analysis.data_consistency.score > 70
-    : analysis_details?.data_consistency || false;
 
   // Check if the actual finding says data is consistent
   const isDataConsistent = detailed_analysis?.data_consistency?.findings?.[0]?.toLowerCase().includes("consistent") || false;

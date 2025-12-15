@@ -29,10 +29,14 @@ const MFAManagement: React.FC = () => {
 
   const fetchMFAStatus = async () => {
     try {
-      const response = await authApi.get('/api/mfa/status');
-      setMfaStatus(response.data);
-    } catch (err) {
-      setError('Failed to fetch MFA status');
+      const status = await authApi.getMFAStatus();
+      setMfaStatus({
+        mfa_enabled: status.enabled,
+        mfa_verified: status.setup_complete,
+        requires_mfa: status.enabled
+      });
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch MFA status');
     }
   };
 
@@ -40,10 +44,13 @@ const MFAManagement: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await authApi.post('/api/mfa/setup');
-      setSetupData(response.data);
+      const response = await authApi.setupMFA();
+      setSetupData({
+        secret: response.secret,
+        qr_code: response.qr_code
+      });
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to setup MFA');
+      setError(err.message || 'Failed to setup MFA');
     } finally {
       setLoading(false);
     }
@@ -53,21 +60,21 @@ const MFAManagement: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await authApi.post('/api/mfa/verify', {
-        token: verificationCode,
-        generate_backup_codes: true
+      const token = localStorage.getItem('token') || '';
+      const response = await authApi.verifyMFA({
+        mfa_session_token: token,
+        token: verificationCode
       });
       
-      if (response.data.backup_codes) {
-        setBackupCodes(response.data.backup_codes);
-        setShowBackupCodes(true);
+      if (response.success && response.token) {
+        localStorage.setItem('token', response.token);
       }
       
       await fetchMFAStatus();
       setSetupData(null);
       setVerificationCode('');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to verify MFA');
+      setError(err.message || 'Failed to verify MFA');
     } finally {
       setLoading(false);
     }
@@ -77,12 +84,13 @@ const MFAManagement: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      await authApi.post('/api/mfa/disable', {
-        password: prompt('Please enter your password to disable MFA:')
-      });
+      const password = prompt('Please enter your password to disable MFA:');
+      if (!password) return;
+      
+      await authApi.disableMFA({ password });
       await fetchMFAStatus();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to disable MFA');
+      setError(err.message || 'Failed to disable MFA');
     } finally {
       setLoading(false);
     }
@@ -92,13 +100,14 @@ const MFAManagement: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await authApi.post('/api/mfa/generate-backup-codes', {
-        password: prompt('Please enter your password to generate backup codes:')
-      });
-      setBackupCodes(response.data.backup_codes);
+      const password = prompt('Please enter your password to generate backup codes:');
+      if (!password) return;
+      
+      const response = await authApi.generateBackupCodes({ password });
+      setBackupCodes(response.backup_codes);
       setShowBackupCodes(true);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to generate backup codes');
+      setError(err.message || 'Failed to generate backup codes');
     } finally {
       setLoading(false);
     }

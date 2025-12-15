@@ -1,4 +1,4 @@
-const DocumentPreview: React.FC<{ file: File }> = ({ file }) => {
+export const DocumentPreview: React.FC<{ file: File }> = ({ file: _file }) => {
   return (
     <div className="preview-container">
       <div className="preview-controls">
@@ -11,3 +11,5 @@ const DocumentPreview: React.FC<{ file: File }> = ({ file }) => {
     </div>
   );
 };
+
+export default DocumentPreview;
