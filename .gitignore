@@ -33,6 +33,9 @@ serviceAccountKey.json
 google-services.json
 GoogleService-Info.plist
 
+# Firebase Client Config (contains API keys)
+frontend/src/config/firebase.ts
+
 # Environment Variables (CRITICAL: Never commit these!)
 .env
 .env.local
