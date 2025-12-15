@@ -1,19 +1,107 @@
 # Node
 node_modules
 dist
+.npm
+.pnpm-debug.log
+yarn-error.log
 
 # Python
 __pycache__
 *.pyc
-instance
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist/
+build/
+.venv
+venv/
+ENV/
+env/
+instance/
 *.db
+*.sqlite
+*.sqlite3
 
-# Firebase
+# Firebase - Service Account Keys (CRITICAL: Never commit these!)
 *-firebase-adminsdk-*.json
+*firebase*adminsdk*.json
+firebase-adminsdk*.json
+serviceAccountKey.json
+google-services.json
+GoogleService-Info.plist
 
-# Env
+# Environment Variables (CRITICAL: Never commit these!)
 .env
 .env.local
+.env.development
+.env.production
+.env.test
+.env.*.local
+*.env
+
+# Secrets and API Keys
+secrets.json
+config.json
+credentials.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+.cache/
+
+# Build outputs
+build/
+dist/
+out/
+.next/
+.nuxt/
+.vite/
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Misc
+*.orig
+*.rej
