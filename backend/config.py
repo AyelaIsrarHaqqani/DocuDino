@@ -1,5 +1,6 @@
 import os
 from datetime import timedelta
+from pathlib import Path
 
 
 class Config:
@@ -50,10 +51,32 @@ class Config:
     MFA_TOKEN_VALIDITY = 300  # seconds
 
 
+def _get_default_db_uri():
+    """Get default database URI with proper path handling."""
+    # Get the backend directory (where config.py is located)
+    basedir = Path(__file__).parent.absolute()
+    instance_dir = basedir / 'instance'
+    # Ensure instance directory exists
+    instance_dir.mkdir(exist_ok=True)
+    db_path = instance_dir / 'app.db'
+    
+    # Convert to string with forward slashes for SQLite URI
+    db_uri_path = str(db_path).replace('\\', '/')
+    
+    # SQLite URI format: sqlite:///absolute/path (3 slashes)
+    return f"sqlite:///{db_uri_path}"
+
 class DevelopmentConfig(Config):
     """Development config."""
     DEBUG = True
     DEVELOPMENT = True
+    
+    # Default SQLite database for development if DATABASE_URL is not set
+    # Compute path at class definition time
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "DATABASE_URL",
+        _get_default_db_uri()
+    )
 
 
 class ProductionConfig(Config):

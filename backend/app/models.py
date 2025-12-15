@@ -1,12 +1,13 @@
+"""
+Document schemas for Firestore collections.
+"""
 import os
 import secrets
 import pyotp
 from datetime import datetime, timedelta
 from enum import Enum
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy.ext.hybrid import hybrid_property
 from cryptography.fernet import Fernet
-from app import db
 
 class RoleEnum(str, Enum):
     ADMIN = 'admin'
@@ -28,139 +29,211 @@ def get_encryption_key():
 encryption_key = get_encryption_key()
 cipher_suite = Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
 
+def encrypt_data(data):
+    """Encrypt sensitive data."""
+    if not data:
+        return None
+    return cipher_suite.encrypt(data.encode()).decode()
+
+def decrypt_data(encrypted_data):
+    """Decrypt sensitive data."""
+    if not encrypted_data:
+        return None
+    try:
+        return cipher_suite.decrypt(encrypted_data.encode()).decode()
+    except Exception:
+        return None
+
+# Document schemas
+USER_SCHEMA = {
+    'email': str,
+    'password': str,  # Hashed password
+    'firstName': str,
+    'lastName': str,
+    'role': str,  # RoleEnum
+    'is_active': bool,
+    'mfa_enabled': bool,
+    'mfa_verified': bool,
+    'mfa_secret': str,  # Encrypted
+    'mfa_backup_codes': list,  # List of dicts with 'code' and 'used' fields
+    'created_at': datetime,
+    'last_login': datetime,
+    'login_attempts': int,
+    'last_login_attempt': datetime,
+    'account_locked_until': datetime,
+    'password_changed_at': datetime,
+    'security_questions': list,
+    'session_tokens': list
+}
+
+VERIFICATION_PROFILE_SCHEMA = {
+    'user_id': str,
+    'full_name': str,  # Encrypted
+    'id_type': str,  # Encrypted
+    'id_number': str,  # Encrypted
+    'date_of_birth': datetime,
+    'verification_status': str,  # pending, verified, rejected
+    'verification_notes': str,
+    'created_at': datetime,
+    'verified_at': datetime,
+    'verified_by_admin_id': str,
+    'document_hash': str,
+    'risk_score': float,
+    'id_document_front': str,  # Encrypted base64 image
+    'id_document_back': str,  # Encrypted base64 image
+    'selfie_image': str  # Encrypted base64 image
+}
+
+MFA_SESSION_SCHEMA = {
+    'user_id': str,
+    'token': str,
+    'created_at': datetime,
+    'expires_at': datetime,
+    'used': bool
+}
+
+AUDIT_LOG_SCHEMA = {
+    'user_id': str,
+    'action': str,
+    'resource_type': str,
+    'resource_id': str,
+    'details': str,
+    'ip_address': str,
+    'user_agent': str,
+    'status': str,
+    'created_at': datetime
+}
+
+BLACKLISTED_TOKEN_SCHEMA = {
+    'token': str,
+    'blacklisted_on': datetime
+}
+
+# Helper functions for document operations
+def create_user_document(data):
+    """Create a new user document with proper encryption."""
+    document = {}
+    for field, field_type in USER_SCHEMA.items():
+        if field in data:
+            if field in ['mfa_secret']:
+                document[field] = encrypt_data(data[field])
+            elif field in ['password']:
+                document[field] = generate_password_hash(data[field])
+            else:
+                document[field] = data[field]
+    
+    # Set default values for required fields
+    document.setdefault('role', RoleEnum.USER.value)
+    document.setdefault('is_active', True)
+    document.setdefault('mfa_enabled', False)
+    document.setdefault('mfa_verified', False)
+    document.setdefault('created_at', datetime.utcnow())
+    document.setdefault('login_attempts', 0)
+    document.setdefault('security_questions', [])
+    document.setdefault('session_tokens', [])
+    
+    return document
+
+def create_verification_profile_document(data):
+    """Create a new verification profile document with proper encryption."""
+    document = {}
+    for field, field_type in VERIFICATION_PROFILE_SCHEMA.items():
+        if field in data:
+            if field in ['full_name', 'id_type', 'id_number']:
+                document[field] = encrypt_data(data[field])
+            elif field in ['id_document_front', 'id_document_back', 'selfie_image']:
+                document[field] = encrypt_data(data[field]) if data[field] else None
+            else:
+                document[field] = data[field]
+    
+    # Set default values for required fields
+    document.setdefault('verification_status', 'pending')
+    document.setdefault('created_at', datetime.utcnow())
+    
+    return document
+
+def create_mfa_session_document(user_id):
+    """Create a new MFA session document."""
+    expires_delta = timedelta(minutes=5)  # 5 minutes validity
+    return {
+        'user_id': user_id,
+        'token': secrets.token_urlsafe(32),
+        'created_at': datetime.utcnow(),
+        'expires_at': datetime.utcnow() + expires_delta,
+        'used': False
+    }
+
+def create_audit_log_document(data):
+    """Create a new audit log document."""
+    document = {}
+    for field, field_type in AUDIT_LOG_SCHEMA.items():
+        if field in data:
+            document[field] = data[field]
+    
+    # Set default values
+    document.setdefault('status', 'success')
+    document.setdefault('created_at', datetime.utcnow())
+    
+    return document
+
+def create_blacklisted_token_document(token):
+    """Create a new blacklisted token document."""
+    return {
+        'token': token,
+        'blacklisted_on': datetime.utcnow()
+    }
+
+# SQLAlchemy Models
+from app import db
+
 class User(db.Model):
-    """User model for authentication and user management."""
+    """User model for SQLAlchemy."""
     __tablename__ = 'users'
     
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(20), default=RoleEnum.USER.value, nullable=False)
+    id = db.Column(db.String(255), primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    username = db.Column(db.String(255), unique=True, nullable=True, index=True)
+    password = db.Column(db.String(255), nullable=False)
+    first_name = db.Column(db.String(255), nullable=True)
+    last_name = db.Column(db.String(255), nullable=True)
+    role = db.Column(db.String(50), nullable=False, default=RoleEnum.USER.value)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    mfa_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    mfa_verified = db.Column(db.Boolean, default=False, nullable=False)
+    mfa_secret = db.Column(db.Text, nullable=True)
+    mfa_backup_codes = db.Column(db.JSON, nullable=True)  # List of dicts with 'code' and 'used' fields
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     last_login = db.Column(db.DateTime, nullable=True)
-    
-    # MFA fields
-    _mfa_secret = db.Column(db.String(256), nullable=True)
-    mfa_enabled = db.Column(db.Boolean, default=False)
-    mfa_verified = db.Column(db.Boolean, default=False)
-    mfa_backup_codes = db.Column(db.Text, nullable=True)  # Store encrypted backup codes
-    
-    # Relationships
-    verification_profiles = db.relationship('VerificationProfile', 
-                                           foreign_keys='VerificationProfile.user_id',
-                                           backref='user', lazy='dynamic')
-    
-    def __init__(self, username, email, password, role=RoleEnum.USER.value):
-        self.username = username
-        self.email = email
-        self.set_password(password)
-        self.role = role
-    
-    def set_password(self, password):
-        """Set password hash."""
-        self.password_hash = generate_password_hash(password)
+    login_attempts = db.Column(db.Integer, default=0, nullable=False)
+    last_login_attempt = db.Column(db.DateTime, nullable=True)
+    account_locked_until = db.Column(db.DateTime, nullable=True)
+    password_changed_at = db.Column(db.DateTime, nullable=True)
+    security_questions = db.Column(db.JSON, nullable=True)
+    session_tokens = db.Column(db.JSON, nullable=True)
     
     def check_password(self, password):
-        """Check password against hash."""
-        return check_password_hash(self.password_hash, password)
+        """Check if the provided password matches the user's password."""
+        return check_password_hash(self.password, password)
     
     def update_last_login(self):
-        """Update the last login time."""
+        """Update the last login timestamp."""
         self.last_login = datetime.utcnow()
     
-    @hybrid_property
-    def mfa_secret(self):
-        """Decrypt and return MFA secret."""
-        if self._mfa_secret:
-            try:
-                return cipher_suite.decrypt(self._mfa_secret.encode()).decode()
-            except Exception:
-                return None
-        return None
-    
-    @mfa_secret.setter
-    def mfa_secret(self, value):
-        """Encrypt and store MFA secret."""
-        if value:
-            self._mfa_secret = cipher_suite.encrypt(value.encode()).decode()
-        else:
-            self._mfa_secret = None
-    
-    def generate_mfa_secret(self):
-        """Generate a new MFA secret."""
-        if not self.mfa_secret:
-            self.mfa_secret = pyotp.random_base32()
-        return self.mfa_secret
-    
-    def get_totp_uri(self):
-        """Generate TOTP URI for QR code."""
-        if self.mfa_secret:
-            return pyotp.totp.TOTP(self.mfa_secret).provisioning_uri(
-                name=self.email, 
-                issuer_name="AI Identity Verification"
-            )
-        return None
-    
-    def verify_totp(self, token):
-        """Verify TOTP token."""
-        if not self.mfa_secret or not self.mfa_enabled:
-            return False
-        
-        totp = pyotp.TOTP(self.mfa_secret)
-        return totp.verify(token)
-    
-    def generate_backup_codes(self, count=10):
-        """Generate backup codes for MFA recovery."""
-        backup_codes = [secrets.token_hex(5).upper() for _ in range(count)]
-        # Encrypt backup codes
-        encrypted_codes = cipher_suite.encrypt(
-            '\n'.join(backup_codes).encode()
-        ).decode()
-        self.mfa_backup_codes = encrypted_codes
-        return backup_codes
-    
-    def verify_backup_code(self, code):
-        """Verify a backup code and remove it if valid."""
-        if not self.mfa_backup_codes:
-            return False
-        
-        try:
-            decrypted_codes = cipher_suite.decrypt(
-                self.mfa_backup_codes.encode()
-            ).decode()
-            codes = decrypted_codes.split('\n')
-            
-            if code in codes:
-                # Remove used code and update
-                codes.remove(code)
-                if codes:
-                    self.mfa_backup_codes = cipher_suite.encrypt(
-                        '\n'.join(codes).encode()
-                    ).decode()
-                else:
-                    self.mfa_backup_codes = None
-                return True
-            return False
-        except Exception:
-            return False
-    
     def requires_mfa(self):
-        """Check if user requires MFA based on role."""
-        from flask import current_app
-        if not current_app.config.get('MFA_ENABLED', False):
-            return False
-        
-        required_roles = current_app.config.get('MFA_REQUIRED_FOR_ROLES', [])
-        return self.role in required_roles or self.mfa_enabled
-        
+        """Check if MFA is required for this user."""
+        from config import get_config
+        config = get_config()
+        required_roles = config.MFA_REQUIRED_FOR_ROLES if hasattr(config, 'MFA_REQUIRED_FOR_ROLES') else []
+        return self.mfa_enabled or self.role in required_roles
+    
     def to_dict(self):
-        """Convert user object to dictionary."""
+        """Convert user model to dictionary."""
         return {
             'id': self.id,
-            'username': self.username,
             'email': self.email,
+            'username': self.username,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
             'role': self.role,
             'is_active': self.is_active,
             'mfa_enabled': self.mfa_enabled,
@@ -168,215 +241,33 @@ class User(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None
         }
-    
-    def __repr__(self):
-        return f'<User {self.username}>'
 
-class VerificationProfile(db.Model):
-    """Model for storing identity verification data."""
-    __tablename__ = 'verification_profiles'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    _full_name = db.Column(db.String(256), nullable=False)  # Encrypted
-    _id_type = db.Column(db.String(256), nullable=False)    # Encrypted
-    _id_number = db.Column(db.String(256), nullable=False)  # Encrypted
-    date_of_birth = db.Column(db.Date, nullable=False)
-    verification_status = db.Column(db.String(20), default='pending')  # pending, verified, rejected
-    verification_notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    verified_at = db.Column(db.DateTime, nullable=True)
-    verified_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    document_hash = db.Column(db.String(128), nullable=True)  # Store hash of document for validation
-    risk_score = db.Column(db.Float, nullable=True)  # AI-driven risk assessment score
-    
-    # Relationship for the admin/verifier who verified this profile
-    verified_by = db.relationship('User', foreign_keys=[verified_by_admin_id])
-    
-    # Document data
-    id_document_front = db.Column(db.Text, nullable=True)  # Encrypted base64 image
-    id_document_back = db.Column(db.Text, nullable=True)   # Encrypted base64 image
-    selfie_image = db.Column(db.Text, nullable=True)       # Encrypted base64 image
-    
-    @hybrid_property
-    def full_name(self):
-        """Decrypt full name."""
-        if self._full_name:
-            try:
-                return cipher_suite.decrypt(self._full_name.encode()).decode()
-            except Exception:
-                return "[Encrypted]"
-        return None
-    
-    @full_name.setter
-    def full_name(self, value):
-        """Encrypt full name."""
-        if value:
-            self._full_name = cipher_suite.encrypt(value.encode()).decode()
-        else:
-            self._full_name = None
-    
-    @hybrid_property
-    def id_type(self):
-        """Decrypt ID type."""
-        if self._id_type:
-            try:
-                return cipher_suite.decrypt(self._id_type.encode()).decode()
-            except Exception:
-                return "[Encrypted]"
-        return None
-        
-    @id_type.setter
-    def id_type(self, value):
-        """Encrypt ID type."""
-        if value:
-            self._id_type = cipher_suite.encrypt(value.encode()).decode()
-        else:
-            self._id_type = None
-    
-    @hybrid_property
-    def id_number(self):
-        """Decrypt ID number."""
-        if self._id_number:
-            try:
-                return cipher_suite.decrypt(self._id_number.encode()).decode()
-            except Exception:
-                return "[Encrypted]"
-        return None
-        
-    @id_number.setter
-    def id_number(self, value):
-        """Encrypt ID number."""
-        if value:
-            self._id_number = cipher_suite.encrypt(value.encode()).decode()
-        else:
-            self._id_number = None
-    
-    def encrypt_document(self, document_data):
-        """Encrypt document data (base64 image)."""
-        if document_data:
-            return cipher_suite.encrypt(document_data.encode()).decode()
-        return None
-    
-    def decrypt_document(self, encrypted_data):
-        """Decrypt document data."""
-        if encrypted_data:
-            try:
-                return cipher_suite.decrypt(encrypted_data.encode()).decode()
-            except Exception:
-                return None
-        return None
-    
-    def store_document_front(self, base64_image):
-        """Store encrypted front of ID document."""
-        self.id_document_front = self.encrypt_document(base64_image)
-        
-    def store_document_back(self, base64_image):
-        """Store encrypted back of ID document."""
-        self.id_document_back = self.encrypt_document(base64_image)
-    
-    def store_selfie(self, base64_image):
-        """Store encrypted selfie image."""
-        self.selfie_image = self.encrypt_document(base64_image)
-    
-    def get_document_front(self):
-        """Get decrypted front of ID document."""
-        return self.decrypt_document(self.id_document_front)
-        
-    def get_document_back(self):
-        """Get decrypted back of ID document."""
-        return self.decrypt_document(self.id_document_back)
-    
-    def get_selfie(self):
-        """Get decrypted selfie image."""
-        return self.decrypt_document(self.selfie_image)
-        
-    def to_dict(self, include_documents=False):
-        """Convert verification profile to dictionary."""
-        result = {
-            'id': self.id,
-            'user_id': self.user_id,
-            'full_name': self.full_name,
-            'id_type': self.id_type,
-            'id_number': self.id_number,
-            'date_of_birth': self.date_of_birth.isoformat() if self.date_of_birth else None,
-            'verification_status': self.verification_status,
-            'verification_notes': self.verification_notes,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'verified_at': self.verified_at.isoformat() if self.verified_at else None,
-            'verified_by_admin_id': self.verified_by_admin_id,
-            'risk_score': self.risk_score
-        }
-        
-        # Include documents only if explicitly requested (for security)
-        if include_documents:
-            result.update({
-                'id_document_front': self.get_document_front(),
-                'id_document_back': self.get_document_back(),
-                'selfie_image': self.get_selfie()
-            })
-            
-        return result
-    
-    def __repr__(self):
-        return f'<VerificationProfile {self.id} - User {self.user_id}>'
 
 class BlacklistedToken(db.Model):
-    """Model for storing blacklisted JWT tokens."""
+    """Blacklisted JWT token model."""
     __tablename__ = 'blacklisted_tokens'
     
     id = db.Column(db.Integer, primary_key=True)
-    token = db.Column(db.String(500), nullable=False, unique=True)
-    blacklisted_on = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    def __repr__(self):
-        return f'<BlacklistedToken {self.id}>'
+    token = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    blacklisted_on = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
 class MFASession(db.Model):
-    """Model for storing MFA verification sessions."""
+    """MFA session model for temporary MFA tokens."""
     __tablename__ = 'mfa_sessions'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    token = db.Column(db.String(128), nullable=False, unique=True, 
-                     default=lambda: secrets.token_urlsafe(64))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.String(255), db.ForeignKey('users.id'), nullable=False, index=True)
+    token = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
-    used = db.Column(db.Boolean, default=False)
-    
-    # Define a relationship to the User model
-    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('mfa_sessions', lazy='dynamic'))
+    used = db.Column(db.Boolean, default=False, nullable=False)
     
     def is_expired(self):
-        """Check if the MFA session is expired."""
+        """Check if the session has expired."""
         return datetime.utcnow() > self.expires_at
     
     def mark_used(self):
-        """Mark this MFA session as used."""
+        """Mark the session as used."""
         self.used = True
-    
-    def __repr__(self):
-        return f'<MFASession {self.id} - User {self.user_id}>'
-
-
-class AuditLog(db.Model):
-    """Model for storing security audit logs."""
-    __tablename__ = 'audit_logs'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    action = db.Column(db.String(100), nullable=False)
-    resource_type = db.Column(db.String(50), nullable=True)
-    resource_id = db.Column(db.Integer, nullable=True)
-    details = db.Column(db.Text, nullable=True)
-    ip_address = db.Column(db.String(45), nullable=True)  # IPv6 can be up to 45 chars
-    user_agent = db.Column(db.String(256), nullable=True)
-    status = db.Column(db.String(20), nullable=False, default='success')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Define a relationship to the User model
-    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('audit_logs', lazy='dynamic'))
-    
-    def __repr__(self):
-        return f'<AuditLog {self.id} - {self.action}>'
+        db.session.commit()

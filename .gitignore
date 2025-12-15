@@ -6,6 +6,10 @@ dist
 __pycache__
 *.pyc
 instance
+*.db
+
+# Firebase
+*-firebase-adminsdk-*.json
 
 # Env
 .env

@@ -39,7 +39,16 @@ def create_app(config_class=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    CORS(app)
+    # Configure CORS to allow requests from frontend
+    CORS(app, 
+         resources={
+             r"/api/*": {
+                 "origins": ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization"]
+             }
+         },
+         supports_credentials=True)
     
     # Initialize security middleware
     from app.utils.middleware import SecurityMiddleware
@@ -88,7 +97,16 @@ def create_app(config_class=None):
     
     # Create database tables if they don't exist
     with app.app_context():
-        db.create_all()
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')
+        logger.info(f"Database URI: {db_uri}")
+        try:
+            db.create_all()
+            logger.info("Database tables created successfully")
+        except Exception as e:
+            logger.error(f"Error creating database tables: {e}", exc_info=True)
+            logger.error(f"Database URI: {db_uri}")
+            # Re-raise the exception so we can see what's wrong
+            raise
     
     return app
 
