@@ -1,5 +1,4 @@
-# .github/workflows/deploy-frontend.yml
-name: Build and Deploy Vite React TypeScript App to Azure Web App - DocuDinoFrontend
+name: Build and deploy Vite React app to Azure Web App - DocuDinoFrontend
 
 on:
   push:
@@ -10,28 +9,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      # Checkout the repo
       - uses: actions/checkout@v4
-
-      # Setup Node.js 20.x
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20.x'
-
-      # Install dependencies and build frontend
-      - name: Install dependencies and build
-        working-directory: frontend
-        run: |
+      - run: |
+          cd frontend
           npm install
           npm run build
-
-      # Upload the built frontend (dist folder) for deployment
-      - name: Upload frontend build artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
@@ -40,30 +28,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    permissions:
-      id-token: write
-      contents: read
-
     steps:
-      # Download the build artifact
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: frontend-build
           path: frontend/dist
-
-      # Login to Azure
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD46496F210E438A979B93B0FFCCAC61 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A4C5926ADF724F2993A3D0F670D76B9F }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F19777A8423D4D04ADEC5BB766E8D4C4 }}
-
-      # Deploy to Azure Web App
-      - name: Deploy to Azure Web App
+      - name: Azure WebApp Deploy
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'DocuDinoFrontend'
+          app-name: 'DocuDinoFrontend'          # Make sure this matches your App Service name
           slot-name: 'Production'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_FRONTEND }}
           package: frontend/dist
